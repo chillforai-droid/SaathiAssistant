@@ -17,8 +17,16 @@ class SaathiAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            event.packageName?.toString()?.let { AccessibilityStateManager.onPackageChanged(it) }
+        val e = event ?: return
+        when (e.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_CLICKED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                e.packageName?.toString()?.let { AccessibilityStateManager.onPackageChanged(it) }
+            }
         }
     }
 

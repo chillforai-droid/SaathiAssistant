@@ -5,6 +5,8 @@ import android.content.Context
 import android.os.Build
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
+import android.graphics.Path
+import android.graphics.Rect
 import com.saathi.assistant.R
 import com.saathi.assistant.automation.StepResult
 import com.saathi.assistant.util.str
@@ -77,19 +79,45 @@ class AccessibilityActionExecutor(private val context: Context) {
     fun scroll(direction: String): StepResult {
         val svc = service() ?: return notEnabled
         val root = svc.rootInActiveWindow ?: return StepResult.fail(context.str(R.string.msg_no_screen), retryable = true)
-        val node = AccessibilityNodeFinder.findScrollable(root) ?: return StepResult.fail(context.str(R.string.msg_no_scrollable))
-        val action = when (direction.lowercase()) {
-            "up" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_UP
-            "left" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_LEFT
-            "right" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_RIGHT
-            else -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_DOWN
-        }
-        val ok = node.performAction(action.id) ||
-            node.performAction(
-                if (direction.lowercase() in setOf("up", "left")) AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        val dir = direction.lowercase()
+        val node = AccessibilityNodeFinder.findScrollable(root)
+        if (node != null) {
+            val action = when (dir) {
+                "up" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_UP
+                "left" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_LEFT
+                "right" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_RIGHT
+                else -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_DOWN
+            }
+            val ok = node.performAction(action.id) || node.performAction(
+                if (dir in setOf("up", "left")) AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
                 else AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
             )
-        return if (ok) StepResult.ok() else StepResult.fail(context.str(R.string.msg_no_scrollable))
+            if (ok) return StepResult.ok()
+        }
+
+        // Fallback for apps that expose no scrollable AccessibilityNodeInfo (common in custom
+        // feeds). This is a gesture on the visible window only; no coordinates leave the device.
+        val bounds = Rect()
+        root.getBoundsInScreen(bounds)
+        if (bounds.width() < 50 || bounds.height() < 100) {
+            return StepResult.fail(context.str(R.string.msg_no_scrollable), retryable = true)
+        }
+        val x = bounds.centerX().toFloat()
+        val y1 = bounds.top + bounds.height() * 0.72f
+        val y2 = bounds.top + bounds.height() * 0.28f
+        val path = Path()
+        when (dir) {
+            "up" -> { path.moveTo(x, y2); path.lineTo(x, y1) }
+            "down" -> { path.moveTo(x, y1); path.lineTo(x, y2) }
+            "left" -> { path.moveTo(bounds.left + bounds.width() * 0.72f, bounds.centerY().toFloat()); path.lineTo(bounds.left + bounds.width() * 0.28f, bounds.centerY().toFloat()) }
+            "right" -> { path.moveTo(bounds.left + bounds.width() * 0.28f, bounds.centerY().toFloat()); path.lineTo(bounds.left + bounds.width() * 0.72f, bounds.centerY().toFloat()) }
+            else -> return StepResult.fail(context.str(R.string.msg_no_scrollable))
+        }
+        val gesture = android.accessibilityservice.GestureDescription.Builder()
+            .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 450))
+            .build()
+        val sent = svc.dispatchGesture(gesture, null, null)
+        return if (sent) StepResult.ok() else StepResult.fail(context.str(R.string.msg_no_scrollable), retryable = true)
     }
 
     /** Visible, non-password text on screen (used only by the on-device "Inspect" demo). */
@@ -97,10 +125,16 @@ class AccessibilityActionExecutor(private val context: Context) {
         val root = service()?.rootInActiveWindow ?: return emptyList()
         return AccessibilityNodeFinder.allNodes(root)
             .filter { it.isVisibleToUser && !it.isPassword }
-            .mapNotNull { it.text?.toString() ?: it.contentDescription?.toString() }
+            .flatMap { listOfNotNull(it.text?.toString(), it.contentDescription?.toString(), it.hintText?.toString()) }
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .distinct()
             .take(limit)
+    }
+
+    fun screenContainsText(target: String): Boolean {
+        val q = target.trim()
+        if (q.isEmpty()) return false
+        return visibleTexts(200).any { it.contains(q, ignoreCase = true) }
     }
 }

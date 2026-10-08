@@ -86,7 +86,7 @@ class CommandParser {
     private fun cleanForWorkflow(ws: List<String>) = ws.filter { it !in fillers && it !in runWords }.joinToString(" ")
 
     private fun parseSend(raw: String, toks: List<Tok>): ParsedCommand? {
-        val si = toks.indexOfFirst { it.norm in sendWords }
+        val si = toks.indexOfFirst { it.norm in sendWords || it.norm in messageWords }
         if (si < 0) return null
         // "Send पर क्लिक करो" is a click on a Send button, not a message command.
         if (toks.any { it.norm in clickWords }) return null

@@ -85,4 +85,15 @@ Create in **Workflows → New**: name, description, trigger phrases, ordered act
 - App icon is a placeholder.
 
 ## Roadmap
-Phase 2: visual recorder, per-app adapters, better Hindi parser, scheduled workflows, notification triggers. Phase 3: optional Gemini/local AI `CommandInterpreter`, contextual multi-step commands. Phase 4: smart routines, device-state triggers, richer editor.
+## Finalized MVP+ improvements in this build
+- Accessibility listens to window/content/focus/click/text/scroll changes so the active package updates reliably during multi-step runs.
+- Text matching prefers clickable exact matches, then exact labels, then a single partial/clickable match; ambiguous screens stop instead of guessing.
+- Resource-id actions accept exact IDs and common `:id/name` or `/name` suffix forms.
+- Scroll uses the app's accessibility scroll action first and falls back to an on-device gesture when an app exposes no scrollable node.
+- Visible-screen inspection also includes hint text while continuing to exclude password fields.
+- Message commands can use either “भेजो/send” or “message/मैसेज” wording.
+
+## Still inherently app-dependent
+No Android app can guarantee 100% control of every third-party app. WhatsApp, Messenger, Facebook, YouTube and others may change their UI or expose different accessibility nodes by version/device. Saathi therefore stops on failed/ambiguous steps and never reports a step as successful when it did not execute.
+
+Roadmap: visual recorder, scheduled workflows, notification triggers, optional Gemini/local AI `CommandInterpreter`, contextual multi-step commands, device-state triggers.
